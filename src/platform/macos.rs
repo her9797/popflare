@@ -1,7 +1,7 @@
 #![allow(deprecated, unexpected_cfgs, unsafe_op_in_unsafe_fn)]
 
 use std::ptr;
-use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
 use std::sync::{Mutex, Once, OnceLock};
 
 use block::ConcreteBlock;
@@ -16,7 +16,7 @@ use objc::declare::ClassDecl;
 use objc::runtime::{Class, Object, Sel};
 use objc::{class, msg_send, sel, sel_impl};
 
-use crate::effect::{FlareEngine, Point};
+use crate::effect::{EffectStyle, FlareEngine, Point, SparkleKind};
 
 const LEFT_MOUSE_DOWN_MASK: u64 = 1 << 1;
 const FLOATING_WINDOW_LEVEL: i64 = 3;
@@ -25,6 +25,14 @@ const FULL_SCREEN_AUXILIARY: u64 = 1 << 8;
 
 static ENGINE: OnceLock<Mutex<FlareEngine>> = OnceLock::new();
 static ENABLED: AtomicBool = AtomicBool::new(true);
+static EFFECT_STYLE: AtomicUsize = AtomicUsize::new(0);
+static STATUS_BUTTON: AtomicPtr<Object> = AtomicPtr::new(ptr::null_mut());
+static COLOR_BURST_ITEM: AtomicPtr<Object> = AtomicPtr::new(ptr::null_mut());
+static COLOR_RINGS_ITEM: AtomicPtr<Object> = AtomicPtr::new(ptr::null_mut());
+static PINK_SPARKLES_ITEM: AtomicPtr<Object> = AtomicPtr::new(ptr::null_mut());
+static COLOR_SPARKLES_ITEM: AtomicPtr<Object> = AtomicPtr::new(ptr::null_mut());
+static MENU_ICON_TICK: AtomicUsize = AtomicUsize::new(0);
+static MENU_ICON_PHASE: AtomicUsize = AtomicUsize::new(0);
 static OVERLAY_VIEW: AtomicPtr<Object> = AtomicPtr::new(ptr::null_mut());
 static mut FLARE_VIEW_CLASS: *const Class = ptr::null();
 static mut MENU_CONTROLLER_CLASS: *const Class = ptr::null();
@@ -97,18 +105,19 @@ unsafe fn create_flare_view(frame: NSRect) -> id {
 }
 
 
-fn menubar_icon_path() -> Option<String> {
+
+fn asset_path(filename: &str) -> Option<String> {
     let exe = std::env::current_exe().ok()?;
     let exe_dir = exe.parent()?;
     let candidates = [
         exe_dir
             .parent()
             .and_then(|contents| contents.parent())
-            .map(|app| app.join("Contents/Resources/assets/popflare-menubar.png")),
+            .map(|app| app.join("Contents/Resources/assets").join(filename)),
         exe_dir
             .parent()
             .and_then(|target| target.parent())
-            .map(|root| root.join("assets/popflare-menubar.png")),
+            .map(|root| root.join("assets").join(filename)),
     ];
 
     candidates
@@ -122,23 +131,14 @@ unsafe fn install_status_menu() {
     let status_item = NSStatusBar::systemStatusBar(nil).statusItemWithLength_(NSVariableStatusItemLength);
     let button: id = msg_send![status_item, button];
     if button != nil {
-        if let Some(icon_path) = menubar_icon_path() {
-            let ns_path = NSString::alloc(nil).init_str(&icon_path);
-            let image = NSImage::alloc(nil).initWithContentsOfFile_(ns_path);
-
-            if image != nil {
-                let _: () = msg_send![image, setTemplate: YES];
-                let _: () = msg_send![image, setSize: NSSize::new(18.0, 18.0)];
-                let _: () = msg_send![button, setImage: image];
-            } else {
-                let title = NSString::alloc(nil).init_str("PF");
-                let _: () = msg_send![button, setTitle: title];
-            }
+        if install_animated_menu_icon(button) {
+            STATUS_BUTTON.store(button as *mut Object, Ordering::Relaxed);
         } else {
             let title = NSString::alloc(nil).init_str("PF");
             let _: () = msg_send![button, setTitle: title];
         }
     }
+    STATUS_BUTTON.store(button as *mut Object, Ordering::Relaxed);
 
     let controller: id = msg_send![menu_controller_class(), new];
     let menu = NSMenu::new(nil).autorelease();
@@ -152,6 +152,52 @@ unsafe fn install_status_menu() {
     enabled_item.setTarget_(controller);
     let _: () = msg_send![enabled_item, setState: 1];
     menu.addItem_(enabled_item);
+
+    menu.addItem_(NSMenuItem::separatorItem(nil));
+
+    let color_title = NSString::alloc(nil).init_str("Color Burst");
+    let color_item = NSMenuItem::alloc(nil).initWithTitle_action_keyEquivalent_(
+        color_title,
+        sel!(selectColorBurst:),
+        NSString::alloc(nil).init_str(""),
+    );
+    color_item.setTarget_(controller);
+    let _: () = msg_send![color_item, setState: 1];
+    menu.addItem_(color_item);
+    COLOR_BURST_ITEM.store(color_item as *mut Object, Ordering::Relaxed);
+
+    let cursor_title = NSString::alloc(nil).init_str("Color Rings");
+    let cursor_item = NSMenuItem::alloc(nil).initWithTitle_action_keyEquivalent_(
+        cursor_title,
+        sel!(selectColorRings:),
+        NSString::alloc(nil).init_str(""),
+    );
+    cursor_item.setTarget_(controller);
+    menu.addItem_(cursor_item);
+    COLOR_RINGS_ITEM.store(cursor_item as *mut Object, Ordering::Relaxed);
+
+    let pink_title = NSString::alloc(nil).init_str("Pink Sparkles");
+    let pink_item = NSMenuItem::alloc(nil).initWithTitle_action_keyEquivalent_(
+        pink_title,
+        sel!(selectPinkSparkles:),
+        NSString::alloc(nil).init_str(""),
+    );
+    pink_item.setTarget_(controller);
+    menu.addItem_(pink_item);
+    PINK_SPARKLES_ITEM.store(pink_item as *mut Object, Ordering::Relaxed);
+
+    let color_sparkles_title = NSString::alloc(nil).init_str("Color Sparkles");
+    let color_sparkles_item = NSMenuItem::alloc(nil).initWithTitle_action_keyEquivalent_(
+        color_sparkles_title,
+        sel!(selectColorSparkles:),
+        NSString::alloc(nil).init_str(""),
+    );
+    color_sparkles_item.setTarget_(controller);
+    menu.addItem_(color_sparkles_item);
+    COLOR_SPARKLES_ITEM.store(color_sparkles_item as *mut Object, Ordering::Relaxed);
+
+
+    menu.addItem_(NSMenuItem::separatorItem(nil));
 
     let quit_title = NSString::alloc(nil).init_str("Quit Popflare");
     let quit_item = NSMenuItem::alloc(nil).initWithTitle_action_keyEquivalent_(
@@ -180,9 +226,10 @@ unsafe fn install_click_monitor(screen_height: f32) {
             y: screen_height - location.y as f32,
         };
 
+        let style = selected_effect_style();
         if let Some(engine) = ENGINE.get() {
             if let Ok(mut engine) = engine.lock() {
-                engine.burst(origin);
+                engine.burst(origin, style);
             }
         }
 
@@ -194,6 +241,67 @@ unsafe fn install_click_monitor(screen_height: f32) {
     std::mem::forget(block);
 }
 
+unsafe fn install_animated_menu_icon(button: id) -> bool {
+    let image = rotated_menu_png(0.0);
+    if image == nil {
+        return false;
+    }
+
+    let _: () = msg_send![button, setImage: image];
+    true
+}
+
+fn update_menu_icon_rotation() {
+    let tick = MENU_ICON_TICK.fetch_add(1, Ordering::Relaxed);
+    if tick % 6 != 0 {
+        return;
+    }
+
+    let button = STATUS_BUTTON.load(Ordering::Relaxed);
+    if button.is_null() {
+        return;
+    }
+
+    let phase = MENU_ICON_PHASE.fetch_add(1, Ordering::Relaxed) % 20;
+    let degrees = phase as f64 * 18.0;
+
+    unsafe {
+        let image = rotated_menu_png(degrees);
+        if image != nil {
+            let _: () = msg_send![button, setImage: image];
+        }
+    }
+}
+
+unsafe fn rotated_menu_png(degrees: f64) -> id {
+    let Some(path) = asset_path("popflare-menubar.png") else {
+        return nil;
+    };
+
+    let ns_path = NSString::alloc(nil).init_str(&path);
+    let source = NSImage::alloc(nil).initWithContentsOfFile_(ns_path);
+    if source == nil {
+        return nil;
+    }
+
+    let size = NSSize::new(18.0, 18.0);
+    let image = NSImage::alloc(nil).initWithSize_(size);
+    let _: () = msg_send![image, lockFocus];
+
+    let transform: id = msg_send![class!(NSAffineTransform), transform];
+    let _: () = msg_send![transform, translateXBy: 9.0f64 yBy: 9.0f64];
+    let _: () = msg_send![transform, rotateByDegrees: degrees];
+    let _: () = msg_send![transform, translateXBy: -9.0f64 yBy: -9.0f64];
+    let _: () = msg_send![transform, concat];
+
+    let rect = NSRect::new(NSPoint::new(0.0, 0.0), size);
+    let _: () = msg_send![source, drawInRect: rect];
+    let _: () = msg_send![image, unlockFocus];
+    let _: () = msg_send![image, setTemplate: YES];
+    let _: () = msg_send![image, setSize: size];
+    image
+}
+
 unsafe fn install_frame_timer() {
     let block = ConcreteBlock::new(move |_timer: id| {
         if let Some(engine) = ENGINE.get() {
@@ -202,6 +310,7 @@ unsafe fn install_frame_timer() {
             }
         }
 
+        update_menu_icon_rotation();
         request_redraw();
     })
     .copy();
@@ -251,6 +360,22 @@ unsafe fn menu_controller_class() -> *const Class {
             sel!(toggleEnabled:),
             toggle_enabled as extern "C" fn(&Object, Sel, id),
         );
+        decl.add_method(
+            sel!(selectColorBurst:),
+            select_color_burst as extern "C" fn(&Object, Sel, id),
+        );
+        decl.add_method(
+            sel!(selectColorRings:),
+            select_color_rings as extern "C" fn(&Object, Sel, id),
+        );
+        decl.add_method(
+            sel!(selectPinkSparkles:),
+            select_pink_sparkles as extern "C" fn(&Object, Sel, id),
+        );
+        decl.add_method(
+            sel!(selectColorSparkles:),
+            select_color_sparkles as extern "C" fn(&Object, Sel, id),
+        );
         decl.add_method(sel!(quit:), quit as extern "C" fn(&Object, Sel, id));
 
         unsafe {
@@ -270,6 +395,65 @@ extern "C" fn toggle_enabled(_this: &Object, _cmd: Sel, item: id) {
     }
 }
 
+
+fn selected_effect_style() -> EffectStyle {
+    match EFFECT_STYLE.load(Ordering::Relaxed) {
+        1 => EffectStyle::ColorRings,
+        2 => EffectStyle::PinkSparkles,
+        3 => EffectStyle::ColorSparkles,
+        _ => EffectStyle::ColorBurst,
+    }
+}
+
+fn set_effect_style(style: EffectStyle) {
+    let style_index = match style {
+        EffectStyle::ColorBurst => 0,
+        EffectStyle::ColorRings => 1,
+        EffectStyle::PinkSparkles => 2,
+        EffectStyle::ColorSparkles => 3,
+    };
+    EFFECT_STYLE.store(style_index, Ordering::Relaxed);
+
+    unsafe {
+        let color_item = COLOR_BURST_ITEM.load(Ordering::Relaxed);
+        if !color_item.is_null() {
+            let _: () = msg_send![color_item, setState: if style == EffectStyle::ColorBurst { 1 } else { 0 }];
+        }
+
+        let cursor_item = COLOR_RINGS_ITEM.load(Ordering::Relaxed);
+        if !cursor_item.is_null() {
+            let _: () = msg_send![cursor_item, setState: if style == EffectStyle::ColorRings { 1 } else { 0 }];
+        }
+
+        let pink_item = PINK_SPARKLES_ITEM.load(Ordering::Relaxed);
+        if !pink_item.is_null() {
+            let _: () = msg_send![pink_item, setState: if style == EffectStyle::PinkSparkles { 1 } else { 0 }];
+        }
+
+        let color_sparkles_item = COLOR_SPARKLES_ITEM.load(Ordering::Relaxed);
+        if !color_sparkles_item.is_null() {
+            let _: () = msg_send![color_sparkles_item, setState: if style == EffectStyle::ColorSparkles { 1 } else { 0 }];
+        }
+
+    }
+}
+
+extern "C" fn select_color_burst(_this: &Object, _cmd: Sel, _item: id) {
+    set_effect_style(EffectStyle::ColorBurst);
+}
+
+extern "C" fn select_color_rings(_this: &Object, _cmd: Sel, _item: id) {
+    set_effect_style(EffectStyle::ColorRings);
+}
+
+extern "C" fn select_pink_sparkles(_this: &Object, _cmd: Sel, _item: id) {
+    set_effect_style(EffectStyle::PinkSparkles);
+}
+
+extern "C" fn select_color_sparkles(_this: &Object, _cmd: Sel, _item: id) {
+    set_effect_style(EffectStyle::ColorSparkles);
+}
+
 extern "C" fn quit(_this: &Object, _cmd: Sel, _item: id) {
     unsafe {
         let app = NSApp();
@@ -281,6 +465,174 @@ extern "C" fn is_flipped(_this: &Object, _cmd: Sel) -> bool {
     true
 }
 
+
+unsafe fn draw_sparkle(origin: Point, kind: SparkleKind, size: f32, rotation: f32, color: crate::effect::Color, opacity: f32) {
+    let color = NSColor::colorWithCalibratedRed_green_blue_alpha_(
+        nil,
+        color.r as f64,
+        color.g as f64,
+        color.b as f64,
+        opacity as f64,
+    );
+    let _: () = msg_send![color, set];
+
+    match kind {
+        SparkleKind::Plus => draw_plus(origin, size, rotation),
+        SparkleKind::Diamond => draw_diamond(origin, size, rotation),
+        SparkleKind::Star => draw_star(origin, size, rotation),
+        SparkleKind::Dot => draw_dot(origin, size),
+        SparkleKind::Asterisk => draw_asterisk(origin, size, rotation),
+    }
+}
+
+unsafe fn draw_dot(origin: Point, size: f32) {
+    let radius = size as f64;
+    let rect = NSRect::new(
+        NSPoint::new(origin.x as f64 - radius, origin.y as f64 - radius),
+        NSSize::new(radius * 2.0, radius * 2.0),
+    );
+    let path: id = msg_send![class!(NSBezierPath), bezierPathWithOvalInRect: rect];
+    let _: () = msg_send![path, fill];
+}
+
+unsafe fn draw_asterisk(origin: Point, size: f32, rotation: f32) {
+    let path: id = msg_send![class!(NSBezierPath), bezierPath];
+    let _: () = msg_send![path, setLineWidth: (size * 0.14) as f64];
+    for index in 0..3 {
+        let angle = rotation + index as f32 * std::f32::consts::PI / 3.0;
+        let dx = angle.cos() * size * 0.48;
+        let dy = angle.sin() * size * 0.48;
+        draw_segment(path, origin, -dx, -dy, dx, dy, 0.0);
+    }
+    let _: () = msg_send![path, stroke];
+}
+
+unsafe fn draw_plus(origin: Point, size: f32, rotation: f32) {
+    let path: id = msg_send![class!(NSBezierPath), bezierPath];
+    let _: () = msg_send![path, setLineWidth: (size * 0.18) as f64];
+    draw_segment(path, origin, -size * 0.55, 0.0, size * 0.55, 0.0, rotation);
+    draw_segment(path, origin, 0.0, -size * 0.55, 0.0, size * 0.55, rotation);
+    let _: () = msg_send![path, stroke];
+}
+
+unsafe fn draw_segment(path: id, origin: Point, x1: f32, y1: f32, x2: f32, y2: f32, rotation: f32) {
+    let start = rotated_point(origin, x1, y1, rotation);
+    let end = rotated_point(origin, x2, y2, rotation);
+    let _: () = msg_send![path, moveToPoint: start];
+    let _: () = msg_send![path, lineToPoint: end];
+}
+
+unsafe fn draw_diamond(origin: Point, size: f32, rotation: f32) {
+    let points = [
+        (0.0, -size * 0.62),
+        (size * 0.28, 0.0),
+        (0.0, size * 0.62),
+        (-size * 0.28, 0.0),
+    ];
+    stroke_polygon(origin, &points, rotation, size * 0.16);
+}
+
+unsafe fn draw_star(origin: Point, size: f32, rotation: f32) {
+    let points = [
+        (0.0, -size * 0.62),
+        (size * 0.16, -size * 0.18),
+        (size * 0.54, -size * 0.10),
+        (size * 0.24, size * 0.14),
+        (size * 0.34, size * 0.54),
+        (0.0, size * 0.30),
+        (-size * 0.34, size * 0.54),
+        (-size * 0.24, size * 0.14),
+        (-size * 0.54, -size * 0.10),
+        (-size * 0.16, -size * 0.18),
+    ];
+    fill_polygon(origin, &points, rotation);
+}
+
+unsafe fn stroke_polygon(origin: Point, points: &[(f32, f32)], rotation: f32, line_width: f32) {
+    let path: id = msg_send![class!(NSBezierPath), bezierPath];
+    let _: () = msg_send![path, setLineWidth: line_width as f64];
+    for (index, (x, y)) in points.iter().enumerate() {
+        let point = rotated_point(origin, *x, *y, rotation);
+        if index == 0 {
+            let _: () = msg_send![path, moveToPoint: point];
+        } else {
+            let _: () = msg_send![path, lineToPoint: point];
+        }
+    }
+    let _: () = msg_send![path, closePath];
+    let _: () = msg_send![path, stroke];
+}
+
+unsafe fn fill_polygon(origin: Point, points: &[(f32, f32)], rotation: f32) {
+    let path: id = msg_send![class!(NSBezierPath), bezierPath];
+    for (index, (x, y)) in points.iter().enumerate() {
+        let point = rotated_point(origin, *x, *y, rotation);
+        if index == 0 {
+            let _: () = msg_send![path, moveToPoint: point];
+        } else {
+            let _: () = msg_send![path, lineToPoint: point];
+        }
+    }
+    let _: () = msg_send![path, closePath];
+    let _: () = msg_send![path, fill];
+}
+
+fn rotated_point(origin: Point, x: f32, y: f32, rotation: f32) -> NSPoint {
+    let cos = rotation.cos();
+    let sin = rotation.sin();
+    NSPoint::new(
+        origin.x as f64 + (x * cos - y * sin) as f64,
+        origin.y as f64 + (x * sin + y * cos) as f64,
+    )
+}
+
+unsafe fn draw_color_rings(origin: Point, scale: f32, opacity: f32) {
+    let rings = [
+        (42.0, -3.0, -1.0, 0.60, 0.18, 0.70),
+        (39.5, 2.0, -2.5, 0.95, 0.42, 0.10),
+        (37.0, -2.0, 1.5, 0.98, 0.86, 0.16),
+        (35.0, 2.5, 1.0, 0.15, 0.75, 0.42),
+        (33.5, -1.0, -2.0, 0.10, 0.28, 0.68),
+        (31.5, 1.0, 2.0, 0.82, 0.10, 0.18),
+        (38.5, -2.5, 2.5, 0.05, 0.54, 0.78),
+    ];
+
+    for (radius, offset_x, offset_y, red, green, blue) in rings {
+        let color = NSColor::colorWithCalibratedRed_green_blue_alpha_(
+            nil,
+            red,
+            green,
+            blue,
+            (opacity * 0.88) as f64,
+        );
+        draw_ellipse_ring(
+            Point {
+                x: origin.x + offset_x * scale,
+                y: origin.y + offset_y * scale,
+            },
+            radius * scale,
+            (radius * 0.94) * scale,
+            1.45 * scale,
+            color,
+        );
+    }
+}
+
+unsafe fn draw_ellipse_ring(origin: Point, width_radius: f32, height_radius: f32, line_width: f32, color: id) {
+    let _: () = msg_send![color, set];
+    let rect = NSRect::new(
+        NSPoint::new(
+            origin.x as f64 - width_radius as f64,
+            origin.y as f64 - height_radius as f64,
+        ),
+        NSSize::new(width_radius as f64 * 2.0, height_radius as f64 * 2.0),
+    );
+    let path: id = msg_send![class!(NSBezierPath), bezierPathWithOvalInRect: rect];
+    let _: () = msg_send![path, setLineWidth: line_width as f64];
+    let _: () = msg_send![path, stroke];
+}
+
+
 extern "C" fn draw_rect(_this: &Object, _cmd: Sel, _rect: NSRect) {
     let Some(engine) = ENGINE.get() else {
         return;
@@ -291,6 +643,14 @@ extern "C" fn draw_rect(_this: &Object, _cmd: Sel, _rect: NSRect) {
     };
 
     unsafe {
+        for ring in engine.color_rings() {
+            draw_color_rings(ring.origin, ring.scale, ring.opacity);
+        }
+
+        for sparkle in engine.sparkles() {
+            draw_sparkle(sparkle.position, sparkle.kind, sparkle.size, sparkle.rotation, sparkle.color, sparkle.color.a);
+        }
+
         for particle in engine.particles() {
             let color = NSColor::colorWithCalibratedRed_green_blue_alpha_(
                 nil,

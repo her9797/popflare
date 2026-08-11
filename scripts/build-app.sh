@@ -18,7 +18,7 @@ rm -rf "$APP_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR/assets"
 
 cp "$ROOT_DIR/target/release/$BINARY_NAME" "$MACOS_DIR/$BINARY_NAME"
-cp "$ROOT_DIR/assets/popflare-menubar.png" "$RESOURCES_DIR/assets/popflare-menubar.png"
+cp "$ROOT_DIR/assets/popflare-menubar.png" "$RESOURCES_DIR/assets/popflare-menubar.png" 2>/dev/null || true
 chmod +x "$MACOS_DIR/$BINARY_NAME"
 
 cat > "$CONTENTS_DIR/Info.plist" <<PLIST

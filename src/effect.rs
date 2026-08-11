@@ -15,6 +15,14 @@ pub struct Color {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+pub enum EffectStyle {
+    ColorBurst,
+    ColorRings,
+    PinkSparkles,
+    ColorSparkles,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Particle {
     pub position: Point,
     pub velocity: Point,
@@ -26,9 +34,41 @@ pub struct Particle {
     pub lifetime_seconds: f32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ColorRingBurst {
+    pub origin: Point,
+    pub scale: f32,
+    pub opacity: f32,
+    pub age_seconds: f32,
+    pub lifetime_seconds: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SparkleKind {
+    Plus,
+    Diamond,
+    Star,
+    Dot,
+    Asterisk,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Sparkle {
+    pub position: Point,
+    pub velocity: Point,
+    pub kind: SparkleKind,
+    pub size: f32,
+    pub rotation: f32,
+    pub color: Color,
+    pub age_seconds: f32,
+    pub lifetime_seconds: f32,
+}
+
 #[derive(Debug, Default)]
 pub struct FlareEngine {
     particles: Vec<Particle>,
+    color_rings: Vec<ColorRingBurst>,
+    sparkles: Vec<Sparkle>,
 }
 
 impl FlareEngine {
@@ -36,13 +76,22 @@ impl FlareEngine {
         Self::default()
     }
 
-    pub fn burst(&mut self, origin: Point) {
+    pub fn burst(&mut self, origin: Point, style: EffectStyle) {
+        match style {
+            EffectStyle::ColorBurst => self.color_burst(origin),
+            EffectStyle::ColorRings => self.spawn_color_rings(origin),
+            EffectStyle::PinkSparkles => self.spawn_pink_sparkles(origin),
+            EffectStyle::ColorSparkles => self.spawn_color_sparkles(origin),
+        }
+    }
+
+    fn color_burst(&mut self, origin: Point) {
         const PARTICLE_COUNT: usize = 12;
 
         for index in 0..PARTICLE_COUNT {
             let angle = (index as f32 / PARTICLE_COUNT as f32) * TAU;
-            let start_radius = 16.0 + (index % 2) as f32 * 2.0;
-            let speed = 150.0 + ((index % 3) as f32 * 18.0);
+            let start_radius = 11.0 + (index % 2) as f32 * 1.5;
+            let speed = 105.0 + ((index % 3) as f32 * 12.0);
 
             let color = match index % 6 {
                 0 => Color { r: 1.0, g: 0.20, b: 0.18, a: 0.96 },
@@ -63,11 +112,84 @@ impl FlareEngine {
                     y: angle.sin() * speed,
                 },
                 angle,
-                length: 11.0 + (index % 3) as f32 * 2.0,
-                radius: 2.4,
+                length: 8.0 + (index % 3) as f32 * 1.5,
+                radius: 1.8,
                 color,
                 age_seconds: 0.0,
                 lifetime_seconds: 0.42 + (index % 3) as f32 * 0.04,
+            });
+        }
+    }
+
+    fn spawn_color_rings(&mut self, origin: Point) {
+        self.color_rings.push(ColorRingBurst {
+            origin,
+            scale: 0.38,
+            opacity: 0.95,
+            age_seconds: 0.0,
+            lifetime_seconds: 0.55,
+        });
+    }
+
+    fn spawn_pink_sparkles(&mut self, origin: Point) {
+        let pink = Color { r: 1.0, g: 0.38, b: 0.68, a: 0.95 };
+        let specs = [
+            (-32.0, -4.0, SparkleKind::Diamond, 13.0, -0.20, pink),
+            (25.0, -8.0, SparkleKind::Diamond, 11.0, 0.18, pink),
+            (6.0, 14.0, SparkleKind::Star, 13.0, 0.10, pink),
+            (-13.0, 21.0, SparkleKind::Star, 11.0, -0.16, pink),
+            (-39.0, 24.0, SparkleKind::Plus, 12.0, 0.03, pink),
+            (4.0, -32.0, SparkleKind::Plus, 11.0, -0.08, pink),
+            (38.0, 25.0, SparkleKind::Diamond, 10.0, 0.24, pink),
+            (27.0, -31.0, SparkleKind::Plus, 10.5, -0.18, pink),
+        ];
+
+        self.spawn_sparkles(origin, &specs);
+    }
+
+    fn spawn_color_sparkles(&mut self, origin: Point) {
+        let yellow = Color { r: 0.96, g: 0.72, b: 0.08, a: 0.95 };
+        let lavender = Color { r: 0.62, g: 0.66, b: 1.0, a: 0.95 };
+        let mint = Color { r: 0.56, g: 0.78, b: 0.44, a: 0.95 };
+        let cyan = Color { r: 0.45, g: 0.84, b: 0.90, a: 0.95 };
+        let specs = [
+            (0.0, 0.0, SparkleKind::Star, 17.0, 0.00, yellow),
+            (-32.0, -20.0, SparkleKind::Plus, 13.0, -0.04, lavender),
+            (34.0, 15.0, SparkleKind::Plus, 13.0, 0.02, lavender),
+            (-24.0, 29.0, SparkleKind::Asterisk, 12.5, 0.16, mint),
+            (24.0, -25.0, SparkleKind::Asterisk, 12.0, -0.18, mint),
+            (38.0, -22.0, SparkleKind::Diamond, 10.5, 0.10, yellow),
+            (-40.0, 2.0, SparkleKind::Dot, 4.0, 0.00, cyan),
+            (24.0, 32.0, SparkleKind::Dot, 4.5, 0.00, cyan),
+            (6.0, 36.0, SparkleKind::Dot, 4.0, 0.00, cyan),
+            (-10.0, -38.0, SparkleKind::Dot, 3.8, 0.00, cyan),
+        ];
+
+        self.spawn_sparkles(origin, &specs);
+    }
+
+    fn spawn_sparkles(
+        &mut self,
+        origin: Point,
+        specs: &[(f32, f32, SparkleKind, f32, f32, Color)],
+    ) {
+        for (index, (offset_x, offset_y, kind, size, rotation, color)) in specs.iter().copied().enumerate() {
+            let angle = (index as f32 / specs.len() as f32) * TAU;
+            self.sparkles.push(Sparkle {
+                position: Point {
+                    x: origin.x + offset_x,
+                    y: origin.y + offset_y,
+                },
+                velocity: Point {
+                    x: angle.cos() * 15.0,
+                    y: angle.sin() * 15.0,
+                },
+                kind,
+                size,
+                rotation,
+                color,
+                age_seconds: 0.0,
+                lifetime_seconds: 0.68 + (index % 3) as f32 * 0.06,
             });
         }
     }
@@ -86,13 +208,46 @@ impl FlareEngine {
             particle.radius *= 0.985;
         }
 
+        for ring in &mut self.color_rings {
+            ring.age_seconds += delta_seconds;
+            let progress = ring.age_seconds / ring.lifetime_seconds;
+            ring.scale = 0.38 + progress * 0.10;
+            ring.opacity = (1.0 - progress).clamp(0.0, 1.0) * 0.95;
+        }
+
+        for sparkle in &mut self.sparkles {
+            sparkle.age_seconds += delta_seconds;
+            sparkle.position.x += sparkle.velocity.x * delta_seconds;
+            sparkle.position.y += sparkle.velocity.y * delta_seconds;
+            sparkle.velocity.x *= 0.96;
+            sparkle.velocity.y *= 0.96;
+
+            let progress = sparkle.age_seconds / sparkle.lifetime_seconds;
+            sparkle.color.a = (1.0 - progress).clamp(0.0, 1.0) * 0.95;
+            sparkle.size *= 0.992;
+            sparkle.rotation += 0.05;
+        }
+
         self.particles
             .retain(|particle| particle.age_seconds < particle.lifetime_seconds);
+        self.color_rings
+            .retain(|ring| ring.age_seconds < ring.lifetime_seconds);
+        self.sparkles
+            .retain(|sparkle| sparkle.age_seconds < sparkle.lifetime_seconds);
     }
 
     pub fn particles(&self) -> &[Particle] {
         &self.particles
     }
+
+    pub fn color_rings(&self) -> &[ColorRingBurst] {
+        &self.color_rings
+    }
+
+    pub fn sparkles(&self) -> &[Sparkle] {
+        &self.sparkles
+    }
+
 }
 
 #[cfg(test)]
@@ -100,19 +255,56 @@ mod tests {
     use super::*;
 
     #[test]
-    fn burst_creates_particles() {
+    fn color_burst_creates_particles() {
         let mut engine = FlareEngine::new();
-        engine.burst(Point { x: 100.0, y: 200.0 });
+        engine.burst(Point { x: 100.0, y: 200.0 }, EffectStyle::ColorBurst);
 
         assert_eq!(engine.particles().len(), 12);
+        assert!(engine.color_rings().is_empty());
+        assert!(engine.sparkles().is_empty());
     }
 
     #[test]
-    fn particles_expire_after_lifetime() {
+    fn color_rings_creates_ring_effect() {
         let mut engine = FlareEngine::new();
-        engine.burst(Point { x: 100.0, y: 200.0 });
+        engine.burst(Point { x: 100.0, y: 200.0 }, EffectStyle::ColorRings);
+
+        assert_eq!(engine.color_rings().len(), 1);
+        assert!(engine.particles().is_empty());
+        assert!(engine.sparkles().is_empty());
+    }
+
+    #[test]
+    fn pink_sparkles_creates_sparkle_effect() {
+        let mut engine = FlareEngine::new();
+        engine.burst(Point { x: 100.0, y: 200.0 }, EffectStyle::PinkSparkles);
+
+        assert_eq!(engine.sparkles().len(), 8);
+        assert!(engine.particles().is_empty());
+        assert!(engine.color_rings().is_empty());
+    }
+
+    #[test]
+    fn color_sparkles_creates_sparkle_effect() {
+        let mut engine = FlareEngine::new();
+        engine.burst(Point { x: 100.0, y: 200.0 }, EffectStyle::ColorSparkles);
+
+        assert_eq!(engine.sparkles().len(), 10);
+        assert!(engine.particles().is_empty());
+        assert!(engine.color_rings().is_empty());
+    }
+
+    #[test]
+    fn effects_expire_after_lifetime() {
+        let mut engine = FlareEngine::new();
+        engine.burst(Point { x: 100.0, y: 200.0 }, EffectStyle::ColorBurst);
+        engine.burst(Point { x: 100.0, y: 200.0 }, EffectStyle::ColorRings);
+        engine.burst(Point { x: 100.0, y: 200.0 }, EffectStyle::PinkSparkles);
+        engine.burst(Point { x: 100.0, y: 200.0 }, EffectStyle::ColorSparkles);
         engine.update(2.0);
 
         assert!(engine.particles().is_empty());
+        assert!(engine.color_rings().is_empty());
+        assert!(engine.sparkles().is_empty());
     }
 }
