@@ -18,6 +18,8 @@ pub struct Color {
 pub struct Particle {
     pub position: Point,
     pub velocity: Point,
+    pub angle: f32,
+    pub length: f32,
     pub radius: f32,
     pub color: Color,
     pub age_seconds: f32,
@@ -35,27 +37,37 @@ impl FlareEngine {
     }
 
     pub fn burst(&mut self, origin: Point) {
-        const PARTICLE_COUNT: usize = 18;
+        const PARTICLE_COUNT: usize = 12;
 
         for index in 0..PARTICLE_COUNT {
             let angle = (index as f32 / PARTICLE_COUNT as f32) * TAU;
-            let speed = 260.0 + ((index % 5) as f32 * 24.0);
-            let warm = index % 3;
+            let start_radius = 16.0 + (index % 2) as f32 * 2.0;
+            let speed = 150.0 + ((index % 3) as f32 * 18.0);
+
+            let color = match index % 6 {
+                0 => Color { r: 1.0, g: 0.20, b: 0.18, a: 0.96 },
+                1 => Color { r: 1.0, g: 0.64, b: 0.12, a: 0.96 },
+                2 => Color { r: 1.0, g: 0.92, b: 0.22, a: 0.96 },
+                3 => Color { r: 0.26, g: 0.86, b: 0.42, a: 0.96 },
+                4 => Color { r: 0.24, g: 0.64, b: 1.0, a: 0.96 },
+                _ => Color { r: 0.86, g: 0.32, b: 1.0, a: 0.96 },
+            };
 
             self.particles.push(Particle {
-                position: origin,
+                position: Point {
+                    x: origin.x + angle.cos() * start_radius,
+                    y: origin.y + angle.sin() * start_radius,
+                },
                 velocity: Point {
                     x: angle.cos() * speed,
                     y: angle.sin() * speed,
                 },
-                radius: 5.0 + (index % 4) as f32,
-                color: match warm {
-                    0 => Color { r: 1.0, g: 0.34, b: 0.18, a: 1.0 },
-                    1 => Color { r: 1.0, g: 0.78, b: 0.22, a: 1.0 },
-                    _ => Color { r: 0.35, g: 0.82, b: 1.0, a: 1.0 },
-                },
+                angle,
+                length: 11.0 + (index % 3) as f32 * 2.0,
+                radius: 2.4,
+                color,
                 age_seconds: 0.0,
-                lifetime_seconds: 0.55 + (index % 4) as f32 * 0.05,
+                lifetime_seconds: 0.42 + (index % 3) as f32 * 0.04,
             });
         }
     }
@@ -65,10 +77,12 @@ impl FlareEngine {
             particle.age_seconds += delta_seconds;
             particle.position.x += particle.velocity.x * delta_seconds;
             particle.position.y += particle.velocity.y * delta_seconds;
-            particle.velocity.y += 520.0 * delta_seconds;
+            particle.velocity.x *= 0.94;
+            particle.velocity.y *= 0.94;
 
             let progress = particle.age_seconds / particle.lifetime_seconds;
-            particle.color.a = (1.0 - progress).clamp(0.0, 1.0);
+            particle.color.a = (1.0 - progress).clamp(0.0, 1.0) * 0.96;
+            particle.length *= 0.99;
             particle.radius *= 0.985;
         }
 
@@ -90,7 +104,7 @@ mod tests {
         let mut engine = FlareEngine::new();
         engine.burst(Point { x: 100.0, y: 200.0 });
 
-        assert_eq!(engine.particles().len(), 18);
+        assert_eq!(engine.particles().len(), 12);
     }
 
     #[test]

@@ -128,6 +128,7 @@ unsafe fn install_status_menu() {
 
             if image != nil {
                 let _: () = msg_send![image, setTemplate: YES];
+                let _: () = msg_send![image, setSize: NSSize::new(18.0, 18.0)];
                 let _: () = msg_send![button, setImage: image];
             } else {
                 let title = NSString::alloc(nil).init_str("PF");
@@ -300,17 +301,23 @@ extern "C" fn draw_rect(_this: &Object, _cmd: Sel, _rect: NSRect) {
             );
             let _: () = msg_send![color, set];
 
-            let radius = particle.radius as f64;
-            let rect = NSRect::new(
-                NSPoint::new(
-                    particle.position.x as f64 - radius,
-                    particle.position.y as f64 - radius,
-                ),
-                NSSize::new(radius * 2.0, radius * 2.0),
+            let half = particle.length as f64 / 2.0;
+            let dx = particle.angle.cos() as f64 * half;
+            let dy = particle.angle.sin() as f64 * half;
+            let start = NSPoint::new(
+                particle.position.x as f64 - dx,
+                particle.position.y as f64 - dy,
+            );
+            let end = NSPoint::new(
+                particle.position.x as f64 + dx,
+                particle.position.y as f64 + dy,
             );
 
-            let path: id = msg_send![class!(NSBezierPath), bezierPathWithOvalInRect: rect];
-            let _: () = msg_send![path, fill];
+            let path: id = msg_send![class!(NSBezierPath), bezierPath];
+            let _: () = msg_send![path, setLineWidth: particle.radius as f64];
+            let _: () = msg_send![path, moveToPoint: start];
+            let _: () = msg_send![path, lineToPoint: end];
+            let _: () = msg_send![path, stroke];
         }
     }
 }
