@@ -166,7 +166,7 @@ unsafe fn install_status_menu() {
     menu.addItem_(color_item);
     COLOR_BURST_ITEM.store(color_item as *mut Object, Ordering::Relaxed);
 
-    let cursor_title = NSString::alloc(nil).init_str("Color Rings");
+    let cursor_title = NSString::alloc(nil).init_str("Rainbow Circle");
     let cursor_item = NSMenuItem::alloc(nil).initWithTitle_action_keyEquivalent_(
         cursor_title,
         sel!(selectColorRings:),
@@ -480,6 +480,7 @@ unsafe fn draw_sparkle(origin: Point, kind: SparkleKind, size: f32, rotation: f3
         SparkleKind::Plus => draw_plus(origin, size, rotation),
         SparkleKind::Diamond => draw_diamond(origin, size, rotation),
         SparkleKind::Star => draw_star(origin, size, rotation),
+        SparkleKind::Twinkle => draw_twinkle(origin, size, rotation),
         SparkleKind::Dot => draw_dot(origin, size),
         SparkleKind::Asterisk => draw_asterisk(origin, size, rotation),
     }
@@ -530,6 +531,20 @@ unsafe fn draw_diamond(origin: Point, size: f32, rotation: f32) {
         (-size * 0.28, 0.0),
     ];
     stroke_polygon(origin, &points, rotation, size * 0.16);
+}
+
+unsafe fn draw_twinkle(origin: Point, size: f32, rotation: f32) {
+    let points = [
+        (0.0, -size * 0.98),
+        (size * 0.17, -size * 0.17),
+        (size * 0.98, 0.0),
+        (size * 0.17, size * 0.17),
+        (0.0, size * 0.98),
+        (-size * 0.17, size * 0.17),
+        (-size * 0.98, 0.0),
+        (-size * 0.17, -size * 0.17),
+    ];
+    fill_polygon(origin, &points, rotation);
 }
 
 unsafe fn draw_star(origin: Point, size: f32, rotation: f32) {
@@ -587,35 +602,41 @@ fn rotated_point(origin: Point, x: f32, y: f32, rotation: f32) -> NSPoint {
 }
 
 unsafe fn draw_color_rings(origin: Point, scale: f32, opacity: f32) {
-    let rings = [
-        (42.0, -3.0, -1.0, 0.60, 0.18, 0.70),
-        (39.5, 2.0, -2.5, 0.95, 0.42, 0.10),
-        (37.0, -2.0, 1.5, 0.98, 0.86, 0.16),
-        (35.0, 2.5, 1.0, 0.15, 0.75, 0.42),
-        (33.5, -1.0, -2.0, 0.10, 0.28, 0.68),
-        (31.5, 1.0, 2.0, 0.82, 0.10, 0.18),
-        (38.5, -2.5, 2.5, 0.05, 0.54, 0.78),
+    let radius = 27.0 * scale;
+    let glow = [
+        (1.42, 7.2, 1.00, 0.58, 0.28, 0.42),
+        (1.26, 6.4, 1.00, 0.82, 0.22, 0.52),
+        (1.10, 6.1, 0.34, 0.96, 0.48, 0.56),
+        (0.94, 5.8, 0.22, 0.76, 1.00, 0.58),
+        (0.78, 5.4, 0.72, 0.42, 1.00, 0.54),
+        (0.62, 5.0, 1.00, 0.45, 0.90, 0.48),
     ];
 
-    for (radius, offset_x, offset_y, red, green, blue) in rings {
+    for (ring_scale, line_width, red, green, blue, alpha) in glow {
         let color = NSColor::colorWithCalibratedRed_green_blue_alpha_(
             nil,
             red,
             green,
             blue,
-            (opacity * 0.88) as f64,
+            (opacity * alpha) as f64,
         );
         draw_ellipse_ring(
-            Point {
-                x: origin.x + offset_x * scale,
-                y: origin.y + offset_y * scale,
-            },
-            radius * scale,
-            (radius * 0.94) * scale,
-            1.45 * scale,
+            origin,
+            radius * ring_scale,
+            radius * ring_scale,
+            line_width * scale,
             color,
         );
     }
+
+    let soft_white = NSColor::colorWithCalibratedRed_green_blue_alpha_(
+        nil,
+        1.0,
+        1.0,
+        1.0,
+        (opacity * 0.34) as f64,
+    );
+    draw_ellipse_ring(origin, radius * 0.48, radius * 0.48, 2.8 * scale, soft_white);
 }
 
 unsafe fn draw_ellipse_ring(origin: Point, width_radius: f32, height_radius: f32, line_width: f32, color: id) {

@@ -48,6 +48,7 @@ pub enum SparkleKind {
     Plus,
     Diamond,
     Star,
+    Twinkle,
     Dot,
     Asterisk,
 }
@@ -132,16 +133,17 @@ impl FlareEngine {
     }
 
     fn spawn_pink_sparkles(&mut self, origin: Point) {
-        let pink = Color { r: 1.0, g: 0.38, b: 0.68, a: 0.95 };
+        let pink = Color { r: 1.0, g: 0.48, b: 0.67, a: 0.96 };
+        let soft_pink = Color { r: 1.0, g: 0.58, b: 0.74, a: 0.92 };
         let specs = [
-            (-32.0, -4.0, SparkleKind::Diamond, 13.0, -0.20, pink),
-            (25.0, -8.0, SparkleKind::Diamond, 11.0, 0.18, pink),
-            (6.0, 14.0, SparkleKind::Star, 13.0, 0.10, pink),
-            (-13.0, 21.0, SparkleKind::Star, 11.0, -0.16, pink),
-            (-39.0, 24.0, SparkleKind::Plus, 12.0, 0.03, pink),
-            (4.0, -32.0, SparkleKind::Plus, 11.0, -0.08, pink),
-            (38.0, 25.0, SparkleKind::Diamond, 10.0, 0.24, pink),
-            (27.0, -31.0, SparkleKind::Plus, 10.5, -0.18, pink),
+            (16.0, -10.0, SparkleKind::Twinkle, 12.0, 0.18, pink),
+            (-15.0, 13.0, SparkleKind::Twinkle, 10.5, -0.28, pink),
+            (3.0, 17.0, SparkleKind::Twinkle, 11.0, 0.36, pink),
+            (-7.0, -16.0, SparkleKind::Twinkle, 8.5, 0.10, soft_pink),
+            (-23.0, -6.0, SparkleKind::Twinkle, 5.5, -0.08, soft_pink),
+            (22.0, 12.0, SparkleKind::Twinkle, 6.0, 0.24, soft_pink),
+            (13.0, -22.0, SparkleKind::Twinkle, 5.0, -0.20, soft_pink),
+            (-20.0, 22.0, SparkleKind::Twinkle, 4.8, 0.16, soft_pink),
         ];
 
         self.spawn_sparkles(origin, &specs);
@@ -153,16 +155,16 @@ impl FlareEngine {
         let mint = Color { r: 0.56, g: 0.78, b: 0.44, a: 0.95 };
         let cyan = Color { r: 0.45, g: 0.84, b: 0.90, a: 0.95 };
         let specs = [
-            (0.0, 0.0, SparkleKind::Star, 17.0, 0.00, yellow),
-            (-32.0, -20.0, SparkleKind::Plus, 13.0, -0.04, lavender),
-            (34.0, 15.0, SparkleKind::Plus, 13.0, 0.02, lavender),
-            (-24.0, 29.0, SparkleKind::Asterisk, 12.5, 0.16, mint),
-            (24.0, -25.0, SparkleKind::Asterisk, 12.0, -0.18, mint),
-            (38.0, -22.0, SparkleKind::Diamond, 10.5, 0.10, yellow),
-            (-40.0, 2.0, SparkleKind::Dot, 4.0, 0.00, cyan),
-            (24.0, 32.0, SparkleKind::Dot, 4.5, 0.00, cyan),
-            (6.0, 36.0, SparkleKind::Dot, 4.0, 0.00, cyan),
-            (-10.0, -38.0, SparkleKind::Dot, 3.8, 0.00, cyan),
+            (0.0, 0.0, SparkleKind::Star, 10.5, 0.00, yellow),
+            (-19.0, -12.0, SparkleKind::Plus, 8.0, -0.04, lavender),
+            (20.0, 9.0, SparkleKind::Plus, 8.0, 0.02, lavender),
+            (-14.0, 17.0, SparkleKind::Asterisk, 7.6, 0.16, mint),
+            (14.0, -15.0, SparkleKind::Asterisk, 7.4, -0.18, mint),
+            (22.0, -13.0, SparkleKind::Diamond, 6.5, 0.10, yellow),
+            (-23.0, 1.0, SparkleKind::Dot, 2.5, 0.00, cyan),
+            (14.0, 19.0, SparkleKind::Dot, 2.8, 0.00, cyan),
+            (4.0, 21.0, SparkleKind::Dot, 2.5, 0.00, cyan),
+            (-6.0, -22.0, SparkleKind::Dot, 2.4, 0.00, cyan),
         ];
 
         self.spawn_sparkles(origin, &specs);
