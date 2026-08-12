@@ -51,6 +51,23 @@ open dist/Popflare.app
 
 다른 Mac에 옮길 때는 Finder에서 `Popflare.app` 하나만 복사하면 됩니다. 터미널에서는 `.app`이 폴더처럼 보이지만, macOS에서는 하나의 앱 파일처럼 표시됩니다.
 
+
+## 처음 실행할 때
+
+Popflare는 아직 Apple Developer ID 서명과 notarization을 하지 않은 개인 빌드입니다.  
+그래서 GitHub Release에서 zip을 내려받아 처음 실행하면 macOS가 “확인되지 않은 개발자” 또는 “악성코드 여부를 확인할 수 없음” 같은 경고를 띄울 수 있습니다.
+
+압축을 푼 뒤 `Popflare.app`이 다운로드 폴더에 있다면, 최초 1회만 아래 명령어를 실행하세요.
+
+```bash
+xattr -dr com.apple.quarantine ~/Downloads/Popflare.app
+chmod +x ~/Downloads/Popflare.app/Contents/MacOS/popflare
+open ~/Downloads/Popflare.app
+```
+
+한 번 실행한 뒤에는 같은 `Popflare.app`에 대해 다시 할 필요가 없습니다.  
+다만 새 버전을 다시 다운로드하거나 다른 Mac으로 옮긴 경우에는 한 번 더 필요할 수 있습니다.
+
 ## 주의사항
 
 - 현재는 macOS 전용입니다.
