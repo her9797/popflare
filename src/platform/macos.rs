@@ -54,21 +54,20 @@ impl PlatformApp {
             let app = NSApp();
             app.setActivationPolicy_(NSApplicationActivationPolicyAccessory);
 
-            let screen = NSScreen::mainScreen(nil);
-            if screen == nil {
-                eprintln!("popflare could not find the main screen.");
+            let Some(frame) = virtual_screen_frame() else {
+                eprintln!("popflare could not find any screen.");
                 return;
-            }
+            };
 
-            let frame = NSScreen::frame(screen);
             let window = create_overlay_window(frame);
-            let view = create_flare_view(frame);
+            let view_frame = NSRect::new(NSPoint::new(0.0, 0.0), frame.size);
+            let view = create_flare_view(view_frame);
             window.setContentView_(view);
             window.makeKeyAndOrderFront_(nil);
             OVERLAY_VIEW.store(view as *mut Object, Ordering::Relaxed);
 
             install_status_menu();
-            install_click_monitor(frame.size.height as f32);
+            install_click_monitor(frame);
             install_frame_timer();
 
             println!("popflare is running in the menu bar. Use the PF menu to toggle or quit.");
@@ -102,6 +101,45 @@ unsafe fn create_flare_view(frame: NSRect) -> id {
     let view: id = msg_send![class, alloc];
     let view: id = msg_send![view, initWithFrame: frame];
     view
+}
+
+unsafe fn virtual_screen_frame() -> Option<NSRect> {
+    let screens = NSScreen::screens(nil);
+    if screens == nil {
+        return None;
+    }
+
+    let count: usize = msg_send![screens, count];
+    if count == 0 {
+        return None;
+    }
+
+    let mut min_x = f64::INFINITY;
+    let mut min_y = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+
+    for index in 0..count {
+        let screen: id = msg_send![screens, objectAtIndex: index];
+        if screen == nil {
+            continue;
+        }
+
+        let frame = NSScreen::frame(screen);
+        min_x = min_x.min(frame.origin.x);
+        min_y = min_y.min(frame.origin.y);
+        max_x = max_x.max(frame.origin.x + frame.size.width);
+        max_y = max_y.max(frame.origin.y + frame.size.height);
+    }
+
+    if !min_x.is_finite() || !min_y.is_finite() || !max_x.is_finite() || !max_y.is_finite() {
+        return None;
+    }
+
+    Some(NSRect::new(
+        NSPoint::new(min_x, min_y),
+        NSSize::new(max_x - min_x, max_y - min_y),
+    ))
 }
 
 
@@ -214,7 +252,7 @@ unsafe fn install_status_menu() {
     let _: () = msg_send![status_item, retain];
 }
 
-unsafe fn install_click_monitor(screen_height: f32) {
+unsafe fn install_click_monitor(screen_frame: NSRect) {
     let block = ConcreteBlock::new(move |event: id| {
         if !ENABLED.load(Ordering::Relaxed) {
             return;
@@ -222,8 +260,8 @@ unsafe fn install_click_monitor(screen_height: f32) {
 
         let location: NSPoint = unsafe { msg_send![event, locationInWindow] };
         let origin = Point {
-            x: location.x as f32,
-            y: screen_height - location.y as f32,
+            x: (location.x - screen_frame.origin.x) as f32,
+            y: (screen_frame.origin.y + screen_frame.size.height - location.y) as f32,
         };
 
         let style = selected_effect_style();
